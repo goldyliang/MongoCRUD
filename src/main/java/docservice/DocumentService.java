@@ -17,13 +17,14 @@ import repository.StoredDocument;
  *  - A field name "id" (String, auto-generated)
  *  - Raw document named "document".
  *
- *    The raw document can be in arbitrary scheme, represented by the map class of {@link ModelMap}
- *    Fields in raw document can be embedded with other documents.
+ * The raw document can be in arbitrary scheme, represented by the map class of {@link ModelMap}
+ * Fields in raw document can be embedded with sub-documents.
  *    
  * @author goldyliang@gmail.com
  *
  */
-@Service public class DocumentService {
+ @Service 
+ public class DocumentService {
 
 	private DocRepository docRepository;
 	
@@ -82,7 +83,7 @@ import repository.StoredDocument;
 	}
 	
 	/**
-	 * Get all documents and fill it in a list of type {@link StoredDocument}
+	 * Get all documents and return by a list of {@link StoredDocument}
 	 * 
 	 * @return The list of documents, wrapped with the raw documents and their IDs
 	 *         Return NULL if no documents found

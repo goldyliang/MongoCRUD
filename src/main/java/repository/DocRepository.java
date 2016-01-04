@@ -7,9 +7,7 @@ import org.springframework.stereotype.Repository;
  * 
  * Interface for accessing MongoDB repository
  * 
- * Each document is represented through {@link StoredDocument}, with following fields
- *     - "id" : the id of the document
- *     - "document" : the raw content of the document with arbitrary scheme. Embedded document is supported.
+ * Each document is represented by {@link StoredDocument}, with id and raw document contents.
  * 
  * A concrete object is to be instanced by the framework and wired to proper service bean(s)
  * 

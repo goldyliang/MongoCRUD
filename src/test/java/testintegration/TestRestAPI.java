@@ -44,7 +44,8 @@ import static org.junit.Assert.*;
  * The controller, service and Mongo repository is to be tested integrated, however the HTTP service
  * is not being setup, and the HTTP requests and consumptions are emulated via MockMvc
  * 
- * The mongod service shall be running at local machine before this test is to launched
+ * The Mongodb service shall be running at local machine before this test is to launched
+ * 
  * > sudo service mongod start
  *
  * 

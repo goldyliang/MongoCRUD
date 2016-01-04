@@ -22,8 +22,7 @@ import docservice.DocumentService;
 import repository.StoredDocument;
 
 /**
- * Service controller based on Spring MVC
- * For the RESTful web service of document CRUD operations
+ * RESTful Spring MVC controller, for a service of JSON document CRUD operations
  * 
  * @author goldyliang@gmail.com
  *
@@ -138,7 +137,7 @@ public class RestWSController {
     }
     
     /**
-     * Retrieve a document by the id provided in the url
+     * Retrieve a document by the id provided in the URL
      * The document is returned in the form of JSON as below:
      * 
      * { "id" : document id, 
@@ -178,7 +177,9 @@ public class RestWSController {
      *   ...
      * ]
      * 
-     * Return HTTP status of 200 OK and empty body if deleted.
+     * Return [] if no any documents.
+     * 
+     * Return HTTP status of 200 OK if no error.
      * Refer to exceptionHandler(s) for status codes to be returned if any error.
      *  
      * @return The list of documents with IDs and raw contents.

@@ -18,6 +18,9 @@ public class StoredDocument {
 	
 	private ModelMap document;
 	
+	/**
+	 * Default constructor
+	 */
 	public StoredDocument () {}
 	
 	/**
