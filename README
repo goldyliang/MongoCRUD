@@ -1,0 +1,42 @@
+
+A demonstration of simple RESTful service, to perform CRUD operations towards a MongoDB collection for arbitrary JSON documents.
+
+The RESTful operations include:
+
+GET from http://.../restAPI/items/{id},    get one document with specific ID (returning document ID as well as raw contents)
+GET from http://.../restAPI/items/,        get all documents (returning document IDs as well as raw contents)
+POST/PUT to http://.../restAPI/items,      add a new document.
+POST/PUT to http://.../restAPI/items/{id}, update an existing document.
+DELETE from http://.../restAPI/items{id},  delete an existing document.
+
+JSON format for single document (POST/PUT, or GET for one document)
+{ "id" : string,
+  "document" : { ... }
+}
+
+JSON format for multiple documents (GET all documents)
+[ { "id" : string,
+    "document" : {...}
+  }
+  { "id" : string,
+    "document" : {...}
+  }
+  ...
+]
+
+HTTP status code to return:
+200 OK,          for normal successful operation, except for adding a new document
+202 Created,     for successfully adding a document
+404 Not found,   if the specified document id is not found
+400 Bad request, if the body of POST/PUT is not a valid JSON document
+500 Internal Server Error, for all other erros.
+
+
+-----------------------------------------------------------------
+Techniques/frameworks used:
+
+Spring MVC framework, with RESTful controller
+Spring Boot with integrated Tomcat server
+Spring data for Mongodb
+JUnit testing for service layer, with Mockito as mocked repository
+JUnit semi-integration testing with Spring MVC test framework, connecting the controller, service and repository.
