@@ -1,6 +1,6 @@
-package testctrl;
+package testdocsvc;
 
-import restservice.DocumentService;
+import docservice.DocumentService;
 
 public class TestDocumentService {
 

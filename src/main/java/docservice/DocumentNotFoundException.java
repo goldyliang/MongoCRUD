@@ -1,4 +1,4 @@
-package restservice;
+package docservice;
 
 public class DocumentNotFoundException extends Exception 
 {

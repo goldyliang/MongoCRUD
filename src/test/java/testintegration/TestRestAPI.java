@@ -1,4 +1,4 @@
-package testctrl;
+package testintegration;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -37,10 +37,10 @@ import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import restservice.Application;
-import restservice.DocIDReturn;
-import restservice.DocRepository;
-import restservice.StoredDocument;
+import repository.DocRepository;
+import repository.StoredDocument;
+import restapi.Application;
+import restapi.DocIDReturn;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.*;
@@ -48,7 +48,7 @@ import static org.junit.Assert.*;
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringApplicationConfiguration(classes = Application.class)
 @WebAppConfiguration
-public class TestRestCtrl {
+public class TestRestAPI {
 
     private MediaType contentType = new MediaType(MediaType.APPLICATION_JSON.getType(),
             MediaType.APPLICATION_JSON.getSubtype(),

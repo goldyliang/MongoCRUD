@@ -1,10 +1,13 @@
-package restservice;
+package docservice;
 
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.ui.ModelMap;
+
+import repository.DocRepository;
+import repository.StoredDocument;
 
 
 @Service

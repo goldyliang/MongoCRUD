@@ -1,4 +1,4 @@
-package restservice;
+package repository;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.ui.ModelMap;

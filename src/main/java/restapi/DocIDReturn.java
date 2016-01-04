@@ -1,4 +1,4 @@
-package restservice;
+package restapi;
 
 
 public class DocIDReturn {
