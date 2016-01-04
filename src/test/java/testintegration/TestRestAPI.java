@@ -1,6 +1,5 @@
 package testintegration;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -13,28 +12,22 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 
-import org.springframework.http.converter.HttpMessageConverter;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
-import org.springframework.mock.http.MockHttpOutputMessage;
-
-import java.io.IOException;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.SpringApplicationConfiguration;
-import org.springframework.http.MediaType;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.ui.ModelMap;
 import org.springframework.web.context.WebApplicationContext;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import repository.DocRepository;
@@ -45,14 +38,25 @@ import restapi.DocIDReturn;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.*;
 
+/**
+ * Integrating test of the document CRUD RESTful service through Spring MVC test framework
+ * 
+ * The controller, service and Mongo repository is to be tested integrated, however the HTTP service
+ * is not being setup, and the HTTP requests and consumptions are emulated via MockMvc
+ * 
+ * The mongod service shall be running at local machine before this test is to launched
+ * > sudo service mongod start
+ *
+ * 
+ * @author goldyliang@gmail.com
+ *
+ */
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringApplicationConfiguration(classes = Application.class)
 @WebAppConfiguration
 public class TestRestAPI {
 
-    private MediaType contentType = new MediaType(MediaType.APPLICATION_JSON.getType(),
-            MediaType.APPLICATION_JSON.getSubtype(),
-            Charset.forName("utf8"));
+	private String contentType = "application/json";
     
 	@Autowired
 	private DocRepository docRepository;
@@ -62,28 +66,26 @@ public class TestRestAPI {
     
     private MockMvc mockMvc;
 
-	List <StoredDocument> preAddedDocs;
+    // Documents to be added in the repository before each test cases
+	private List <StoredDocument> preAddedDocs;
 	
-    private HttpMessageConverter mappingJackson2HttpMessageConverter;
-
-    @Autowired
-    void setConverters(HttpMessageConverter<?>[] converters) {
-
-        this.mappingJackson2HttpMessageConverter = Arrays.asList(converters).stream().filter(
-                hmc -> hmc instanceof MappingJackson2HttpMessageConverter).findAny().get();
-
-        Assert.assertNotNull("the JSON message converter must not be null",
-                this.mappingJackson2HttpMessageConverter);
+	// Mapper for object <-> JSON conversion
+	private ObjectMapper mapper = new ObjectMapper();
+    
+	// Convert an object to JSON string
+    private  String objectToJson (Object o) throws JsonProcessingException {
+		return mapper.writeValueAsString(o);
     }
-	
-    protected String json(Object o) throws IOException {
-        MockHttpOutputMessage mockHttpOutputMessage = new MockHttpOutputMessage();
-        this.mappingJackson2HttpMessageConverter.write(
-                o, MediaType.APPLICATION_JSON, mockHttpOutputMessage);
-        return mockHttpOutputMessage.getBodyAsString();
-    }
-	
-	
+
+    /*
+     Helper method to create a document for testing, with following scheme
+     { "author" : { 
+                     "name" : name , 
+                     "address" : address 
+                  }
+       "content" : content
+     }     
+     */
 	private ModelMap createDoc (String name, String address, String content) {
         ModelMap doc = new ModelMap ();
         
@@ -96,6 +98,7 @@ public class TestRestAPI {
         return doc;
 	}
 	
+	// Add a document to the preAddedDocs list
 	private void addDoc (String name, String address, String content) {
 		
 		StoredDocument doc = new StoredDocument (createDoc (name,address,content));
@@ -103,31 +106,62 @@ public class TestRestAPI {
         preAddedDocs.add ( docRepository.save(doc));
 	}
 	
+	/**
+	 * Helper method to verify a document (together with id) returned in ResultActions,
+	 * to check if it is the same as provided in doc
+	 * 
+	 * If i>=0, it is expected that the result in ResultActions is in a JSON array
+	 * and the compare is to be performed towards the document in the array with index i (0 based)
+	 * 
+	 * If i < 0, it is expected that the result is a single document which is to be compared
+	 * 
+	 * Each document is to expected to be as following scheme 
+	 * (aligned with the one generated by createDoc() )
+	 * 
+	 * { "id" : id,
+	 *   "document" : { "author" : { "name":name, "address":address },
+	 *                  "content" : content
+	 *                }
+	 * }
+	 * 
+	 * @param r  The result to be verified
+	 * @param i  The index of the document to be verified (if i>= 0)
+	 * @param doc The document to be compared
+	 */
 	@SuppressWarnings("unchecked")
 	private ResultActions verifyDoc (
 			ResultActions r, 
 			int i,
 			StoredDocument doc) throws Exception {
+		
 		String id = doc.getId();
 		String content = (String) doc.getDocument().get("content");
+		
 		Map <String, Object> auth = (Map<String, Object>) doc.getDocument().get("author");
+		
 		String name = (String) auth.get("name");
 		String address = (String) auth.get("address");
 		
 		String pathPrefix = (i>=0? "$[" + i + "]" : "$");
 
         return r.andExpect(status().isOk())
-        		.andExpect(content().contentType(contentType))
+        		.andExpect(content().contentTypeCompatibleWith(contentType))
         		.andExpect(jsonPath( pathPrefix + ".id", is(id)))
         		.andExpect(jsonPath( pathPrefix + ".document.content", is(content)))
         		.andExpect(jsonPath( pathPrefix + ".document.author.name", is(name)))
         		.andExpect(jsonPath( pathPrefix + ".document.author.address", is (address)));
 	}
 	
+	/**
+	 * Create mockMvc, clear and add certain records to the repository before each test case
+	 * 
+	 * @throws Exception
+	 */
     @Before
     public void setup() throws Exception {
-        mockMvc = webAppContextSetup(webApplicationContext).build();
 
+    	mockMvc = webAppContextSetup(webApplicationContext).build();
+    	 
         docRepository.deleteAll();
 
         preAddedDocs = new ArrayList <StoredDocument> ();
@@ -136,180 +170,340 @@ public class TestRestAPI {
         addDoc ("Betty", "6951 fielding", "Another content");
     }
 	
+    /**
+     * Test GET on /restAPI/items
+     * To retrieve all documents
+     * 
+     * @throws Exception
+     */
     @Test
 	public void testGetAllDoc () throws Exception {
 		
         ResultActions r = mockMvc.perform(get("/restAPI/items/"));
         
-        r.andExpect(status().isOk())
-        .andExpect(content().contentType(contentType));
+        r.andExpect(status().isOk())   // HTTP status
+         .andExpect(content().contentTypeCompatibleWith("application/json")); // content type shall be 
         
+        // Verify each document
         for (int i = 0; i < preAddedDocs.size(); i++)
         	verifyDoc (r, i, preAddedDocs.get(i));
  	}
     
+    /**
+     * Test GET on /restAPI/items/{id}, to retrieve one document
+     * 
+     * @throws Exception
+     */
 	@Test
 	public void testGetOneDoc () throws Exception {
 		
+		// Try retrieving the first document
 		StoredDocument doc = preAddedDocs.get(0);
 		String id = doc.getId();
 		
         ResultActions r = mockMvc.perform(get("/restAPI/items/" + id));
         
         r.andExpect(status().isOk())
-        .andExpect(content().contentType(contentType));
+         .andExpect(content().contentTypeCompatibleWith(contentType));
         
+        // The expected result is not an array, so provide i < 0
         verifyDoc (r, -1, doc);
         
+        // Try retrieving the second document
         doc = preAddedDocs.get(1);
 		id = doc.getId();
 		
         r = mockMvc.perform(get("/restAPI/items/" + id));
         
         r.andExpect(status().isOk())
-        .andExpect(content().contentType(contentType));
+        .andExpect(content().contentTypeCompatibleWith(contentType));
         
         verifyDoc (r, -1, doc);
         
 	}
 	
+	/**
+	 * Test GET on /restAPI/items/{id}, but the document is not found
+	 * @throws Exception
+	 */
 	@Test
 	public void testGetOneDocNotFound () throws Exception {
 		
 		StoredDocument doc = preAddedDocs.get(0);
 		String id = doc.getId();
 		
+		// Manipulate the id to be a wrong id
 		id = id.substring(0, id.length()-1);
 		
         ResultActions r = mockMvc.perform(get("/restAPI/items/" + id));
         
+        // HTTP status shall be NotFound
         r.andExpect(status().isNotFound());
 	}
 	
-	
+	// Test POST or PUT on /restAPI/items, to add a document
+	private void testAddOneNewDoc (boolean isPost) throws Exception {
+		ModelMap newDoc = createDoc("Bach", "unknonwn", "Wonderful");
+		
+		String jsonNewDoc = objectToJson(newDoc);
+		
+		MockHttpServletRequestBuilder builder;
+		
+		if (isPost)
+			builder = post ("/restAPI/items/");
+		else
+			builder = put ("/restAPI/items");
+		
+		MvcResult result = mockMvc.perform(builder.contentType (contentType)
+												  .content(jsonNewDoc))
+												  .andExpect(status().isCreated() )
+								  .andReturn();
+	    
+		// Get the response body
+		String resultJson = result.getResponse().getContentAsString();
+		
+		// Get the document ID returned
+		DocIDReturn idRet = mapper.readValue(resultJson, DocIDReturn.class);
+		
+		// Now in the database there shall be 3 documents
+        assertEquals (3, docRepository.count());
+        
+        // Get the document just added, and verify
+        StoredDocument retrievedDoc = docRepository.findOne(idRet.getId());
+        
+        assertEquals (newDoc, retrievedDoc.getDocument());	
+	}
+	/**
+	 * Test POST on /restAPI/items, to add a document
+	 * 
+	 * @throws Exception
+	 */
 	@Test
 	public void testPostOneNewDoc () throws Exception {
-		
-		ModelMap newDoc = createDoc("Bach", "unknonwn", "Wonderful");
-		
-		String jsonNewDoc = json(newDoc);
-		
-		MvcResult result = 
-				this.mockMvc.perform(post("/restAPI/items/")
-					.contentType(contentType)
-					.content(jsonNewDoc))
-        			.andExpect(status().isCreated())
-        			.andReturn();
-	    
-		String resultJson = result.getResponse().getContentAsString();
-		
-		ObjectMapper mapper = new ObjectMapper();
-		
-		DocIDReturn idRet = mapper.readValue(resultJson, DocIDReturn.class);
-		
-        assertEquals (3, docRepository.count());
-        
-        StoredDocument retrievedDoc = docRepository.findOne(idRet.getId());
-        
-        assertEquals (newDoc, retrievedDoc.getDocument());		
-		
+		testAddOneNewDoc (true); // isPost = true
 	}
 	
+	/**
+	 * Test PUT on /restAPI/items, to add a document
+	 * @throws Exception
+	 */
 	@Test
 	public void testPutOneNewDoc () throws Exception {
-		
-		ModelMap newDoc = createDoc("Bach", "unknonwn", "Wonderful");
-		
-		String jsonNewDoc = json(newDoc);
-		
-		MvcResult result = 
-				this.mockMvc.perform(put("/restAPI/items/")
-					.contentType(contentType)
-					.content(jsonNewDoc))
-        			.andExpect(status().isCreated())
-        			.andReturn();
-	    
-		String resultJson = result.getResponse().getContentAsString();
-		
-		ObjectMapper mapper = new ObjectMapper();
-		
-		DocIDReturn idRet = mapper.readValue(resultJson, DocIDReturn.class);
-		
-        assertEquals (3, docRepository.count());
-        
-        StoredDocument retrievedDoc = docRepository.findOne(idRet.getId());
-        
-        assertEquals (newDoc, retrievedDoc.getDocument());		
-		
+		testAddOneNewDoc (false); // isPost = false
 	}
 	
-	@Test
-	public void testPostUpdateDoc () throws Exception {
+	/*
+	 * Test POST or PUT on /restAPI/items, but with an invalid body
+	 */
+	public void testAddOneNewDoc_Invalid (boolean isPost) throws Exception {
 		
 		ModelMap newDoc = createDoc("Bach", "unknonwn", "Wonderful");
 		
-		String jsonNewDoc = json(newDoc);
+		String jsonNewDoc = objectToJson(newDoc);
 		
+		// Manipulate the json string to be a wrong input
+		jsonNewDoc = jsonNewDoc.substring(0, jsonNewDoc.lastIndexOf("}"));
+		
+		MockHttpServletRequestBuilder builder;
+
+		if (isPost)
+			builder = post ("/restAPI/items/");
+		else
+			builder = put ("/restAPI/items/");
+		
+		mockMvc.perform(builder.contentType (contentType)
+							   .content(jsonNewDoc))
+							   .andExpect(status().isBadRequest() );
+	    
+		// Number of document not changed
+        assertEquals (2, docRepository.count());
+	}
+	
+	/**
+	 * Test POST to /restAPI/items/ to add a new document
+	 * But the body of the request is invalid input
+	 * 
+	 * @throws Exception
+	 */
+	@Test
+	public void testPostOneNewDoc_Invalid () throws Exception {
+		testAddOneNewDoc_Invalid (true); //isPost = true
+	}
+	
+	/**
+	 * Test PUT to /restAPI/items/ to add a new document
+	 * But the body of the request is invalid input
+	 * 
+	 * @throws Exception
+	 */
+	@Test
+	public void testPutOneNewDoc_Invalid () throws Exception {
+		testAddOneNewDoc_Invalid (false); //isPost = false
+	}
+	
+	/*
+	 * Test POST or PUT to /restAPI/items/{id}, to update a new document
+	 */
+	public void testUpdateDoc (boolean isPost) throws Exception {
+		
+		ModelMap newDoc = createDoc("Bach", "unknonwn", "Wonderful");
+		
+		String jsonNewDoc = objectToJson(newDoc);
+		
+		// get an existing id
 		String id = this.preAddedDocs.get(0).getId();
 		
-		this.mockMvc.perform(post("/restAPI/items/" + id)
-			.contentType(contentType)
-			.content(jsonNewDoc))
-			.andExpect(status().isOk());
+		MockHttpServletRequestBuilder builder;
+
+		if (isPost)
+			builder = post ("/restAPI/items/" + id);
+		else
+			builder = put ("/restAPI/items/" + id);
+		
+		this.mockMvc.perform(builder
+							.contentType(contentType)
+							.content(jsonNewDoc))
+							.andExpect(status().isOk());
 	    
+		// the number of document not changed
         assertEquals (2, docRepository.count());
         
+        // Verify the original document is updated
         StoredDocument retrievedDoc = docRepository.findOne(id);
         
         assertEquals (newDoc, retrievedDoc.getDocument());		
 		
 	}
 	
-	@Test
-	public void testPostUpdateDocNotFound () throws Exception {
+	/*
+	 * Test POST or PUT to /restAPI/items/{id}, to update a new document
+	 * But the specified document is not found
+	 */
+	public void testUpdateDocNotFound (boolean isPost) throws Exception {
 		
 		ModelMap newDoc = createDoc("Bach", "unknonwn", "Wonderful");
 		
-		String jsonNewDoc = json(newDoc);
+		String jsonNewDoc = objectToJson(newDoc);
 		
 		String id = this.preAddedDocs.get(0).getId();
+		
+		// Fake ID which does not exist
 		String fakeId = id.substring(0, id.length()-1);
 		
-		this.mockMvc.perform(post("/restAPI/items/" + fakeId)
-			.contentType(contentType)
-			.content(jsonNewDoc))
-			.andExpect(status().isNotFound());
+		MockHttpServletRequestBuilder builder;
+
+		if (isPost)
+			builder = post ("/restAPI/items/" + fakeId);
+		else
+			builder = put ("/restAPI/items/" + fakeId);
+		
+		this.mockMvc.perform(builder
+							.contentType(contentType)
+							.content(jsonNewDoc))
+							.andExpect(status().isNotFound());
 	    
+		// Number of document not changed
         assertEquals (2, docRepository.count());
         
+        // Original document not changed
         StoredDocument retrievedDoc = docRepository.findOne(id);
         
         assertEquals (preAddedDocs.get(0).getDocument(), retrievedDoc.getDocument());		
-		
 	}
 	
-	@Test
-	public void testPutUpdateDoc () throws Exception {
+	/*
+	 * Test POST or PUT to /restAPI/items/{id}, to update a new document
+	 * But the request body is not valid
+	 */
+	public void testUpdateDocNotValid (boolean isPost) throws Exception {
 		
 		ModelMap newDoc = createDoc("Bach", "unknonwn", "Wonderful");
 		
-		String jsonNewDoc = json(newDoc);
+		String jsonNewDoc = objectToJson(newDoc);
 		
 		String id = this.preAddedDocs.get(0).getId();
 		
-		this.mockMvc.perform(put("/restAPI/items/" + id)
-			.contentType(contentType)
-			.content(jsonNewDoc))
-			.andExpect(status().isOk());
+		// Manipulate the json string to be a wrong input
+		jsonNewDoc = jsonNewDoc.substring(0, jsonNewDoc.lastIndexOf("}"));
+		
+		MockHttpServletRequestBuilder builder;
+
+		if (isPost)
+			builder = post ("/restAPI/items/" + id);
+		else
+			builder = put ("/restAPI/items/" + id);
+		
+		this.mockMvc.perform(builder
+							.contentType(contentType)
+							.content(jsonNewDoc))
+							.andExpect(status().isBadRequest());
 	    
+		// Number of document not changed
         assertEquals (2, docRepository.count());
         
+        // Original document not changed
         StoredDocument retrievedDoc = docRepository.findOne(id);
         
-        assertEquals (newDoc, retrievedDoc.getDocument());		
-		
+        assertEquals (preAddedDocs.get(0).getDocument(), retrievedDoc.getDocument());		
 	}
 	
+	/**
+	 * Test POST to /restAPI/items/{id}, to update a new document
+	 */
+	@Test
+	public void testPostUpdateDoc () throws Exception {
+		testUpdateDoc (true); // isPost = true
+	}
+	
+	/**
+	 * Test PUT to /restAPI/items/{id}, to update a new document
+	 */
+	@Test
+	public void testPutUpdateDoc () throws Exception {
+		testUpdateDoc (false); // isPost = false
+	}
+	
+	/**
+	 * Test POST to /restAPI/items/{id}, to update a new document
+	 * But the specified document is not found
+	 */
+	@Test
+	public void testPostUpdateDocNotFound () throws Exception {
+		testUpdateDocNotFound (true); // isPost = true
+	}
+	
+	/**
+	 * Test PUT to /restAPI/items/{id}, to update a new document
+	 * But the specified document is not found
+	 */
+	@Test	
+	public void testPutUpdateDocNotFound () throws Exception {
+		testUpdateDocNotFound (false); // isPost = false
+	}
+	
+	/**
+	 * Test POST to /restAPI/items/{id}, to update a new document
+	 * But the request body is not valid
+	 */
+	@Test
+	public void testPostUpdateDocNotValid () throws Exception {
+		testUpdateDocNotValid (true); // isPost = true
+	}
+	
+	/**
+	 * Test PUT to /restAPI/items/{id}, to update a new document
+	 * But the request body is not valid
+	 */
+	@Test
+	public void testPutUpdateDocNotValid () throws Exception {
+		testUpdateDocNotValid (false); // isPost = false
+	}
+
+	/**
+	 * Test DELETE to /restAPI/items/{id}, to delete a document
+	 * 
+	 * @throws Exception
+	 */
 	@Test
 	public void testDeleteDoc () throws Exception {
 		
@@ -317,32 +511,43 @@ public class TestRestAPI {
 		
 		this.mockMvc.perform(delete("/restAPI/items/" + id)
 								.contentType(contentType))
-			.andExpect(status().isOk());
+					.andExpect(status().isOk());
 	    
+		// Number of document decreased by 1
         assertEquals (1, docRepository.count());
         
+        // The original document is deleted
         StoredDocument retrievedDoc = docRepository.findOne(id);
         
         assertNull (retrievedDoc);		
 		
 	}
 	
+	/**
+	 * Test DELETE to /restAPI/items/{id}, to delete a document
+	 * But the specified document is not found
+	 * @throws Exception
+	 */
 	@Test
 	public void testDeleteDocNotFound () throws Exception {
 		
 		String id = this.preAddedDocs.get(1).getId();
 		
+		// Provide a wrong id
 		String fakeId = id.substring(0, id.length()-1);
 		
 		this.mockMvc.perform(delete("/restAPI/items/" + fakeId)
 								.contentType(contentType))
 			.andExpect(status().isNotFound());
 	    
+		// Number of document not changed
         assertEquals (2, docRepository.count());
         
+        // Original document still exist
         StoredDocument retrievedDoc = docRepository.findOne(id);
         
         assertEquals (preAddedDocs.get(1).getDocument(), retrievedDoc.getDocument());		
 		
 	}
+
 }
